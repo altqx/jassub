@@ -262,6 +262,36 @@ static char *copyString(const std::string &str) {
   return result;
 }
 
+struct EventTimeEntry {
+  int event_index;
+  long long start_ms;
+  long long end_ms;
+};
+
+struct FrameCache {
+  long long time_ms;
+  int canvas_w;
+  int canvas_h;
+  bool valid;
+  
+  FrameCache() : time_ms(-1), canvas_w(0), canvas_h(0), valid(false) {}
+  
+  bool matches(long long tm, int w, int h) const {
+    return valid && time_ms == tm && canvas_w == w && canvas_h == h;
+  }
+  
+  void update(long long tm, int w, int h) {
+    time_ms = tm;
+    canvas_w = w;
+    canvas_h = h;
+    valid = true;
+  }
+  
+  void invalidate() {
+    valid = false;
+  }
+};
+
 class JASSUB {
 private:
   ReusableBuffer m_buffer;
@@ -278,6 +308,11 @@ private:
   int status;
 
   const char *defaultFont;
+
+  EventTimeEntry *event_index;
+  int event_index_size;
+  bool event_index_valid;
+  FrameCache frame_cache;
 
 public:
   ASS_Track *track;
@@ -296,6 +331,11 @@ public:
     drop_animations = false;
     scanned_events = 0;
     this->debug = debug;
+    
+    // Initialize event index
+    event_index = NULL;
+    event_index_size = 0;
+    event_index_valid = false;
 
     defaultFont = copyString(df);
     ass_library = ass_library_init();
@@ -341,16 +381,96 @@ public:
     }
     scanned_events = i;
   }
+  
+  void buildEventIndex() {
+    freeEventIndex();
+    
+    if (!track || track->n_events == 0) return;
+    
+    event_index_size = track->n_events;
+    event_index = new EventTimeEntry[event_index_size];
+    
+    for (int i = 0; i < event_index_size; i++) {
+      ASS_Event *ev = &track->events[i];
+      event_index[i].event_index = i;
+      event_index[i].start_ms = ev->Start;
+      event_index[i].end_ms = ev->Start + ev->Duration;
+    }
+    
+    for (int i = 1; i < event_index_size; i++) {
+      EventTimeEntry key = event_index[i];
+      int j = i - 1;
+      while (j >= 0 && event_index[j].start_ms > key.start_ms) {
+        event_index[j + 1] = event_index[j];
+        j--;
+      }
+      event_index[j + 1] = key;
+    }
+    
+    event_index_valid = true;
+    if (debug) {
+      printf("JASSUB: Built event index with %d entries\n", event_index_size);
+    }
+  }
+  
+  void freeEventIndex() {
+    if (event_index) {
+      delete[] event_index;
+      event_index = NULL;
+    }
+    event_index_size = 0;
+    event_index_valid = false;
+  }
+  
+  /*
+   * \brief Find first event index that may be active at given time
+   * Returns -1 if no events could be active.
+   */
+  int findFirstActiveEvent(long long time_ms) const {
+    if (!event_index_valid || event_index_size == 0) return 0;
+    
+    // Binary search for first event that ends after time_ms
+    int left = 0, right = event_index_size - 1;
+    int result = -1;
+    
+    while (left <= right) {
+      int mid = (left + right) / 2;
+      if (event_index[mid].end_ms > time_ms) {
+        result = mid;
+        right = mid - 1;
+      } else {
+        left = mid + 1;
+      }
+    }
+    
+    if (result > 0) {
+      while (result > 0 && event_index[result - 1].end_ms > time_ms) {
+        result--;
+      }
+    }
+    
+    return result >= 0 ? result : 0;
+  }
 
   /* TRACK */
   void createTrackMem(std::string buf) {
     removeTrack();
-    track = ass_read_memory(ass_library, buf.data(), buf.size(), NULL);
+    char *data = buf.empty() ? nullptr : &buf[0];
+    track = ass_read_memory(ass_library, data, buf.size(), NULL);
     if (!track) {
       fprintf(stderr, "JASSUB: Failed to start a track\n");
       exit(4);
     }
-    scanAnimations(0);
+
+    if (drop_animations) {
+      scanAnimations(0);
+    } else {
+      scanned_events = 0;
+    }
+    
+    buildEventIndex();
+    
+    frame_cache.invalidate();
 
     trackColorSpace = track->YCbCrMatrix;
   }
@@ -360,6 +480,8 @@ public:
       ass_free_track(track);
       track = NULL;
     }
+    freeEventIndex();
+    frame_cache.invalidate();
   }
   /* TRACK */
 
@@ -369,6 +491,7 @@ public:
     ass_set_frame_size(ass_renderer, canvas_w, canvas_h);
     this->canvas_h = canvas_h;
     this->canvas_w = canvas_w;
+    frame_cache.invalidate();
   }
   int getBufferSize(ASS_Image *img) {
     int size = 0;
@@ -473,10 +596,14 @@ public:
   }
 
   int allocEvent() {
+    event_index_valid = false;
+    frame_cache.invalidate();
     return ass_alloc_event(track);
   }
 
   void removeEvent(int eid) {
+    event_index_valid = false;
+    frame_cache.invalidate();
     ass_free_event(track, eid);
   }
 
@@ -493,6 +620,8 @@ public:
   }
 
   void removeAllEvents() {
+    freeEventIndex();
+    frame_cache.invalidate();
     ass_flush_events(track);
   }
 

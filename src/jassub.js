@@ -4,7 +4,7 @@ const webYCbCrMap = {
   bt709: 'BT709',
   // these might not be exactly correct? oops?
   bt470bg: 'BT601', // alias BT.601 PAL... whats the difference?
-  smpte170m: 'BT601'// alias BT.601 NTSC... whats the difference?
+  smpte170m: 'BT601' // alias BT.601 NTSC... whats the difference?
 }
 
 const colorMatrixConversionMap = {
@@ -58,20 +58,25 @@ export default class JASSUB extends EventTarget {
    * @param {Number} [options.libassMemoryLimit] libass bitmap cache memory limit in MiB (approximate).
    * @param {Number} [options.libassGlyphLimit] libass glyph cache memory limit in MiB (approximate).
    */
-  constructor (options) {
+  constructor(options) {
     super()
     if (!globalThis.Worker) throw this.destroy('Worker not supported')
     if (!options) throw this.destroy('No options provided')
 
-    this._loaded = /** @type {Promise<void>} */(new Promise(resolve => {
-      this._init = resolve
-    }))
+    this._loaded = /** @type {Promise<void>} */ (
+      new Promise((resolve) => {
+        this._init = resolve
+      })
+    )
 
     const test = JASSUB._test()
     this._onDemandRender = 'requestVideoFrameCallback' in HTMLVideoElement.prototype && (options.onDemandRender ?? true)
 
     // don't support offscreen rendering on custom canvases, as we can't replace it if colorSpace doesn't match
-    this._offscreenRender = 'transferControlToOffscreen' in HTMLCanvasElement.prototype && !options.canvas && (options.offscreenRender ?? true)
+    this._offscreenRender =
+      'transferControlToOffscreen' in HTMLCanvasElement.prototype &&
+      !options.canvas &&
+      (options.offscreenRender ?? true)
 
     this.timeOffset = options.timeOffset || 0
     this._video = options.video
@@ -88,7 +93,7 @@ export default class JASSUB extends EventTarget {
 
       this._video.insertAdjacentElement('afterend', this._canvasParent)
     } else if (!this._canvas) {
-      throw this.destroy('Don\'t know where to render: you should give video or canvas in options.')
+      throw this.destroy("Don't know where to render: you should give video or canvas in options.")
     }
 
     this._bufferCanvas = document.createElement('canvas')
@@ -117,13 +122,16 @@ export default class JASSUB extends EventTarget {
     }
 
     this._worker = new Worker(options.workerUrl || 'jassub-worker.js')
-    this._worker.onmessage = e => this._onmessage(e)
-    this._worker.onerror = e => this._error(e)
+    this._worker.onmessage = (e) => this._onmessage(e)
+    this._worker.onerror = (e) => this._error(e)
 
     test.then(() => {
       this._worker.postMessage({
         target: 'init',
-        wasmUrl: JASSUB._supportsSIMD && options.modernWasmUrl ? options.modernWasmUrl : options.wasmUrl ?? 'jassub-worker.wasm',
+        wasmUrl:
+          JASSUB._supportsSIMD && options.modernWasmUrl
+            ? options.modernWasmUrl
+            : options.wasmUrl ?? 'jassub-worker.wasm',
         legacyWasmUrl: options.legacyWasmUrl ?? 'jassub-worker.wasm.js',
         asyncRender: typeof createImageBitmap !== 'undefined' && (options.asyncRender ?? true),
         onDemandRender: this._onDemandRender,
@@ -133,14 +141,18 @@ export default class JASSUB extends EventTarget {
         subUrl: options.subUrl,
         subContent: options.subContent || null,
         fonts: options.fonts || [],
-        availableFonts: options.availableFonts || { 'liberation sans': './default.woff2' },
+        availableFonts: options.availableFonts || {
+          'liberation sans': './default.woff2'
+        },
         fallbackFont: options.fallbackFont || 'liberation sans',
         debug: this.debug,
         targetFps: options.targetFps || 24,
         dropAllAnimations: options.dropAllAnimations,
         dropAllBlur: options.dropAllBlur,
-        libassMemoryLimit: options.libassMemoryLimit || 0,
-        libassGlyphLimit: options.libassGlyphLimit || 0,
+        // Sensible defaults for heavy loads (>10MB subtitle files)
+        // 128 MiB bitmap cache and 2048 glyph limit prevent runaway memory usage
+        libassMemoryLimit: options.libassMemoryLimit ?? 128,
+        libassGlyphLimit: options.libassGlyphLimit ?? 2048,
         // @ts-ignore
         useLocalFonts: typeof queryLocalFonts !== 'undefined' && (options.useLocalFonts ?? true),
         hasBitmapBug: JASSUB._hasBitmapBug
@@ -149,7 +161,7 @@ export default class JASSUB extends EventTarget {
     })
   }
 
-  _createCanvas () {
+  _createCanvas() {
     this._canvas = document.createElement('canvas')
     this._canvas.style.display = 'block'
     this._canvas.style.position = 'absolute'
@@ -167,17 +179,51 @@ export default class JASSUB extends EventTarget {
   /** @type {boolean|null} */
   static _hasBitmapBug = null
 
-  static _testSIMD () {
+  static _testSIMD() {
     if (JASSUB._supportsSIMD !== null) return
 
     try {
-      JASSUB._supportsSIMD = WebAssembly.validate(Uint8Array.of(0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11))
+      JASSUB._supportsSIMD = WebAssembly.validate(
+        Uint8Array.of(
+          0,
+          97,
+          115,
+          109,
+          1,
+          0,
+          0,
+          0,
+          1,
+          5,
+          1,
+          96,
+          0,
+          1,
+          123,
+          3,
+          2,
+          1,
+          0,
+          10,
+          10,
+          1,
+          8,
+          0,
+          65,
+          0,
+          253,
+          15,
+          253,
+          98,
+          11
+        )
+      )
     } catch (e) {
       JASSUB._supportsSIMD = false
     }
   }
 
-  static async _testImageBugs () {
+  static async _testImageBugs() {
     if (JASSUB._hasBitmapBug !== null) return
 
     const canvas1 = document.createElement('canvas')
@@ -240,7 +286,7 @@ export default class JASSUB extends EventTarget {
     canvas2.remove()
   }
 
-  static async _test () {
+  static async _test() {
     JASSUB._testSIMD()
     await JASSUB._testImageBugs()
   }
@@ -253,7 +299,7 @@ export default class JASSUB extends EventTarget {
    * @param  {Number} [left=0]
    * @param  {Boolean} [force=false]
    */
-  resize (width = 0, height = 0, top = 0, left = 0, force = this._video?.paused) {
+  resize(width = 0, height = 0, top = 0, left = 0, force = this._video?.paused) {
     if ((!width || !height) && this._video) {
       const videoSize = this._getVideoPosition()
       let renderSize = null
@@ -282,10 +328,16 @@ export default class JASSUB extends EventTarget {
     } else {
       force = false
     }
-    this.sendMessage('canvas', { width, height, videoWidth: this._videoWidth || this._video.videoWidth, videoHeight: this._videoHeight || this._video.videoHeight, force })
+    this.sendMessage('canvas', {
+      width,
+      height,
+      videoWidth: this._videoWidth || this._video.videoWidth,
+      videoHeight: this._videoHeight || this._video.videoHeight,
+      force
+    })
   }
 
-  _getVideoPosition (width = this._video.videoWidth, height = this._video.videoHeight) {
+  _getVideoPosition(width = this._video.videoWidth, height = this._video.videoHeight) {
     const videoRatio = width / height
     const { offsetWidth, offsetHeight } = this._video
     const elementRatio = offsetWidth / offsetHeight
@@ -303,7 +355,7 @@ export default class JASSUB extends EventTarget {
     return { width, height, x, y }
   }
 
-  _computeCanvasSize (width = 0, height = 0) {
+  _computeCanvasSize(width = 0, height = 0) {
     const scalefactor = this.prescaleFactor <= 0 ? 1.0 : this.prescaleFactor
     const ratio = self.devicePixelRatio || 1
 
@@ -328,7 +380,7 @@ export default class JASSUB extends EventTarget {
     return { width, height }
   }
 
-  _timeupdate ({ type }) {
+  _timeupdate({ type }) {
     const eventmap = {
       seeking: true,
       waiting: true,
@@ -343,7 +395,7 @@ export default class JASSUB extends EventTarget {
    * Change the video to use as target for event listeners.
    * @param  {HTMLVideoElement} video
    */
-  setVideo (video) {
+  setVideo(video) {
     if (video instanceof HTMLVideoElement) {
       this._removeListeners()
       this._video = video
@@ -376,7 +428,7 @@ export default class JASSUB extends EventTarget {
     }
   }
 
-  runBenchmark () {
+  runBenchmark() {
     this.sendMessage('runBenchmark')
   }
 
@@ -384,7 +436,7 @@ export default class JASSUB extends EventTarget {
    * Overwrites the current subtitle content.
    * @param  {String} url URL to load subtitles from.
    */
-  setTrackByUrl (url) {
+  setTrackByUrl(url) {
     this.sendMessage('setTrackByUrl', { url })
     this._reAttachOffscreen()
     if (this._ctx) this._ctx.filter = 'none'
@@ -394,7 +446,7 @@ export default class JASSUB extends EventTarget {
    * Overwrites the current subtitle content.
    * @param  {String} content Content of the ASS file.
    */
-  setTrack (content) {
+  setTrack(content) {
     this.sendMessage('setTrack', { content })
     this._reAttachOffscreen()
     if (this._ctx) this._ctx.filter = 'none'
@@ -403,7 +455,7 @@ export default class JASSUB extends EventTarget {
   /**
    * Free currently used subtitle track.
    */
-  freeTrack () {
+  freeTrack() {
     this.sendMessage('freeTrack')
   }
 
@@ -411,7 +463,7 @@ export default class JASSUB extends EventTarget {
    * Sets the playback state of the media.
    * @param  {Boolean} isPaused Pause/Play subtitle playback.
    */
-  setIsPaused (isPaused) {
+  setIsPaused(isPaused) {
     this.sendMessage('video', { isPaused })
   }
 
@@ -419,7 +471,7 @@ export default class JASSUB extends EventTarget {
    * Sets the playback rate of the media [speed multiplier].
    * @param  {Number} rate Playback rate.
    */
-  setRate (rate) {
+  setRate(rate) {
     this.sendMessage('video', { rate })
   }
 
@@ -429,8 +481,13 @@ export default class JASSUB extends EventTarget {
    * @param  {Number} [currentTime] Time in seconds.
    * @param  {Number} [rate] Playback rate.
    */
-  setCurrentTime (isPaused, currentTime, rate) {
-    this.sendMessage('video', { isPaused, currentTime, rate, colorSpace: this._videoColorSpace })
+  setCurrentTime(isPaused, currentTime, rate) {
+    this.sendMessage('video', {
+      isPaused,
+      currentTime,
+      rate,
+      colorSpace: this._videoColorSpace
+    })
   }
 
   /**
@@ -447,13 +504,13 @@ export default class JASSUB extends EventTarget {
    * @property {Number} ReadOrder Number in order of which to read this event.
    * @property {Number} Layer Z-index overlap in which to render this event.
    * @property {Number} _index (Internal) index of the event.
-  */
+   */
 
   /**
    * Create a new ASS event directly.
    * @param  {ASS_Event} event
    */
-  createEvent (event) {
+  createEvent(event) {
     this.sendMessage('createEvent', { event })
   }
 
@@ -462,7 +519,7 @@ export default class JASSUB extends EventTarget {
    * @param  {ASS_Event} event
    * @param  {Number} index
    */
-  setEvent (event, index) {
+  setEvent(event, index) {
     this.sendMessage('setEvent', { event, index })
   }
 
@@ -470,7 +527,7 @@ export default class JASSUB extends EventTarget {
    * Remove the event with the specified index.
    * @param  {Number} index
    */
-  removeEvent (index) {
+  removeEvent(index) {
     this.sendMessage('removeEvent', { index })
   }
 
@@ -478,12 +535,15 @@ export default class JASSUB extends EventTarget {
    * Get all ASS events.
    * @param  {function(Error|null, ASS_Event): void} callback Function to callback when worker returns the events.
    */
-  getEvents (callback) {
-    this._fetchFromWorker({
-      target: 'getEvents'
-    }, (err, { events }) => {
-      callback(err, events)
-    })
+  getEvents(callback) {
+    this._fetchFromWorker(
+      {
+        target: 'getEvents'
+      },
+      (err, { events }) => {
+        callback(err, events)
+      }
+    )
   }
 
   /**
@@ -529,13 +589,13 @@ export default class JASSUB extends EventTarget {
    * @property {Number} treat_fontname_as_pattern
    * @property {Number} Blur
    * @property {Number} Justify
-  */
+   */
 
   /**
    * Create a new ASS style directly.
    * @param  {ASS_Style} style
    */
-  createStyle (style) {
+  createStyle(style) {
     this.sendMessage('createStyle', { style })
   }
 
@@ -544,7 +604,7 @@ export default class JASSUB extends EventTarget {
    * @param  {ASS_Style} style
    * @param  {Number} index
    */
-  setStyle (style, index) {
+  setStyle(style, index) {
     this.sendMessage('setStyle', { style, index })
   }
 
@@ -552,7 +612,7 @@ export default class JASSUB extends EventTarget {
    * Remove the style with the specified index.
    * @param  {Number} index
    */
-  removeStyle (index) {
+  removeStyle(index) {
     this.sendMessage('removeStyle', { index })
   }
 
@@ -560,19 +620,22 @@ export default class JASSUB extends EventTarget {
    * Get all ASS styles.
    * @param  {function(Error|null, ASS_Style): void} callback Function to callback when worker returns the styles.
    */
-  getStyles (callback) {
-    this._fetchFromWorker({
-      target: 'getStyles'
-    }, (err, { styles }) => {
-      callback(err, styles)
-    })
+  getStyles(callback) {
+    this._fetchFromWorker(
+      {
+        target: 'getStyles'
+      },
+      (err, { styles }) => {
+        callback(err, styles)
+      }
+    )
   }
 
   /**
    * Adds a font to the renderer.
    * @param  {String|Uint8Array} font Font to add.
    */
-  addFont (font) {
+  addFont(font) {
     this.sendMessage('addFont', { font })
   }
   /**
@@ -583,14 +646,59 @@ export default class JASSUB extends EventTarget {
     this.sendMessage('defaultFont', { font })
   }
 
-  _sendLocalFont (name) {
+  /**
+   * @typedef {Object} PerformanceStats
+   * @property {Number} framesRendered Total frames rendered since reset.
+   * @property {Number} framesDropped Number of frames dropped.
+   * @property {Number} avgRenderTime Average render time in milliseconds.
+   * @property {Number} maxRenderTime Maximum render time in milliseconds.
+   * @property {Number} minRenderTime Minimum render time in milliseconds.
+   * @property {Number} lastRenderTime Last render time in milliseconds.
+   * @property {Number} renderFps Estimated render FPS based on timing.
+   * @property {Boolean} usingWorker Whether using Web Worker.
+   * @property {Number} pendingRenders Number of pending render operations.
+   * @property {Number} totalEvents Total subtitle events in current track.
+   * @property {Number} cacheHits Number of cache hits (unchanged frames).
+   * @property {Number} cacheMisses Number of cache misses (rendered frames).
+   */
+
+  /**
+   * Get real-time performance statistics.
+   * @param  {function(Error|null, PerformanceStats): void} callback Function to callback with stats.
+   */
+  getStats(callback) {
+    this._fetchFromWorker({ target: 'getStats' }, (err, { stats }) => {
+      if (err) return callback(err, null)
+      // Augment with main thread info
+      const augmented = {
+        ...stats,
+        renderFps: stats.avgRenderTime > 0 ? Math.round(1000 / stats.avgRenderTime) : 0,
+        usingWorker: true,
+        offscreenRender: this._offscreenRender,
+        onDemandRender: this._onDemandRender
+      }
+      callback(null, augmented)
+    })
+  }
+
+  /**
+   * Reset performance statistics counters.
+   * @param  {function(Error|null): void} [callback] Optional callback when reset completes.
+   */
+  resetStats(callback) {
+    this._fetchFromWorker({ target: 'resetStats' }, (err) => {
+      if (callback) callback(err)
+    })
+  }
+
+  _sendLocalFont(name) {
     try {
       // @ts-ignore
-      queryLocalFonts().then(fontData => {
-        const font = fontData?.find(obj => obj.fullName.toLowerCase() === name)
+      queryLocalFonts().then((fontData) => {
+        const font = fontData?.find((obj) => obj.fullName.toLowerCase() === name)
         if (font) {
-          font.blob().then(blob => {
-            blob.arrayBuffer().then(buffer => {
+          font.blob().then((blob) => {
+            blob.arrayBuffer().then((buffer) => {
               this.addFont(new Uint8Array(buffer))
             })
           })
@@ -601,13 +709,13 @@ export default class JASSUB extends EventTarget {
     }
   }
 
-  _getLocalFont ({ font }) {
+  _getLocalFont({ font }) {
     try {
       // electron by default has all permissions enabled, and it doesn't have perm query
       // if this happens, just send it
       if (navigator?.permissions?.query) {
         // @ts-ignore
-        navigator.permissions.query({ name: 'local-fonts' }).then(permission => {
+        navigator.permissions.query({ name: 'local-fonts' }).then((permission) => {
           if (permission.state === 'granted') {
             this._sendLocalFont(font)
           }
@@ -620,7 +728,7 @@ export default class JASSUB extends EventTarget {
     }
   }
 
-  _unbusy () {
+  _unbusy() {
     // play catchup, leads to more frames being painted, but also more jitter
     if (this._lastDemandTime) {
       this._demandRender(this._lastDemandTime)
@@ -629,7 +737,7 @@ export default class JASSUB extends EventTarget {
     }
   }
 
-  _handleRVFC (now, { mediaTime, width, height }) {
+  _handleRVFC(now, { mediaTime, width, height }) {
     if (this._destroyed) return null
     if (this.busy) {
       this._lastDemandTime = { mediaTime, width, height }
@@ -640,7 +748,7 @@ export default class JASSUB extends EventTarget {
     this._video.requestVideoFrameCallback(this._handleRVFC.bind(this))
   }
 
-  _demandRender ({ mediaTime, width, height }) {
+  _demandRender({ mediaTime, width, height }) {
     this._lastDemandTime = null
     if (width !== this._videoWidth || height !== this._videoHeight) {
       this._videoWidth = width
@@ -651,7 +759,7 @@ export default class JASSUB extends EventTarget {
   }
 
   // if we're using offscreen render, we can't use ctx filters, so we can't use a transfered canvas
-  _detachOffscreen () {
+  _detachOffscreen() {
     if (!this._offscreenRender || this._ctx) return null
     this._canvas.remove()
     this._createCanvas()
@@ -664,7 +772,7 @@ export default class JASSUB extends EventTarget {
   }
 
   // if the video or track changed, we need to re-attach the offscreen canvas
-  _reAttachOffscreen () {
+  _reAttachOffscreen() {
     if (!this._offscreenRender || !this._ctx) return null
     this._canvas.remove()
     this._createCanvas()
@@ -674,7 +782,7 @@ export default class JASSUB extends EventTarget {
     this.resize(0, 0, 0, 0, true)
   }
 
-  _updateColorSpace () {
+  _updateColorSpace() {
     this._video.requestVideoFrameCallback(() => {
       try {
         // eslint-disable-next-line no-undef
@@ -695,14 +803,14 @@ export default class JASSUB extends EventTarget {
    * @param  {String} options.subtitleColorSpace Subtitle color space. One of: BT601 BT709 SMPTE240M FCC
    * @param  {String=} options.videoColorSpace Video color space. One of: BT601 BT709
    */
-  _verifyColorSpace ({ subtitleColorSpace, videoColorSpace = this._videoColorSpace }) {
+  _verifyColorSpace({ subtitleColorSpace, videoColorSpace = this._videoColorSpace }) {
     if (!subtitleColorSpace || !videoColorSpace) return
     if (subtitleColorSpace === videoColorSpace) return
     this._detachOffscreen()
     this._ctx.filter = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'><filter id='f'><feColorMatrix type='matrix' values='${colorMatrixConversionMap[subtitleColorSpace][videoColorSpace]} 0 0 0 0 0 1 0'/></filter></svg>#f")`
   }
 
-  _render ({ images, asyncRender, times, width, height, colorSpace }) {
+  _render({ images, asyncRender, times, width, height, colorSpace }) {
     this._unbusy()
     if (this.debug) times.IPCTime = Date.now() - times.JSRenderTime
     if (this._canvasctrl.width !== width || this._canvasctrl.height !== height) {
@@ -719,7 +827,11 @@ export default class JASSUB extends EventTarget {
         } else {
           this._bufferCanvas.width = image.w
           this._bufferCanvas.height = image.h
-          this._bufferCtx.putImageData(new ImageData(this._fixAlpha(new Uint8ClampedArray(image.image)), image.w, image.h), 0, 0)
+          this._bufferCtx.putImageData(
+            new ImageData(this._fixAlpha(new Uint8ClampedArray(image.image)), image.w, image.h),
+            0,
+            0
+          )
           this._ctx.drawImage(this._bufferCanvas, image.x, image.y)
         }
       }
@@ -734,7 +846,7 @@ export default class JASSUB extends EventTarget {
     }
   }
 
-  _fixAlpha (uint8) {
+  _fixAlpha(uint8) {
     if (JASSUB._hasAlphaBug) {
       for (let j = 3; j < uint8.length; j += 4) {
         uint8[j] = uint8[j] > 1 ? uint8[j] : 1
@@ -743,7 +855,7 @@ export default class JASSUB extends EventTarget {
     return uint8
   }
 
-  _ready () {
+  _ready() {
     this._init()
     this.dispatchEvent(new CustomEvent('ready'))
   }
@@ -754,14 +866,17 @@ export default class JASSUB extends EventTarget {
    * @param  {Object} [data] Data for function.
    * @param  {Transferable[]} [transferable] Array of transferables.
    */
-  async sendMessage (target, data = {}, transferable) {
+  async sendMessage(target, data = {}, transferable) {
     await this._loaded
     if (transferable) {
-      this._worker.postMessage({
-        target,
-        transferable,
-        ...data
-      }, [...transferable])
+      this._worker.postMessage(
+        {
+          target,
+          transferable,
+          ...data
+        },
+        [...transferable]
+      )
     } else {
       this._worker.postMessage({
         target,
@@ -770,7 +885,7 @@ export default class JASSUB extends EventTarget {
     }
   }
 
-  _fetchFromWorker (workerOptions, callback) {
+  _fetchFromWorker(workerOptions, callback) {
     try {
       const target = workerOptions.target
 
@@ -787,7 +902,7 @@ export default class JASSUB extends EventTarget {
         }
       }
 
-      const reject = event => {
+      const reject = (event) => {
         callback(event)
         this._worker.removeEventListener('message', resolve)
         this._worker.removeEventListener('error', reject)
@@ -803,24 +918,26 @@ export default class JASSUB extends EventTarget {
     }
   }
 
-  _console ({ content, command }) {
+  _console({ content, command }) {
     console[command].apply(console, JSON.parse(content))
   }
 
-  _onmessage ({ data }) {
+  _onmessage({ data }) {
     if (this['_' + data.target]) this['_' + data.target](data)
   }
 
-  _error (err) {
-    const error = err instanceof Error
-      ? err // pass
-      : err instanceof ErrorEvent
+  _error(err) {
+    const error =
+      err instanceof Error
+        ? err // pass
+        : err instanceof ErrorEvent
         ? err.error // ErrorEvent has error property which is an Error object
         : new Error(err) // construct Error
 
-    const event = err instanceof Event
-      ? new ErrorEvent(err.type, err) // clone event
-      : new ErrorEvent('error', { error }) // construct Event
+    const event =
+      err instanceof Event
+        ? new ErrorEvent(err.type, err) // clone event
+        : new ErrorEvent('error', { error }) // construct Event
 
     this.dispatchEvent(event)
 
@@ -829,7 +946,7 @@ export default class JASSUB extends EventTarget {
     return error
   }
 
-  _removeListeners () {
+  _removeListeners() {
     if (this._video) {
       if (this._ro) this._ro.unobserve(this._video)
       if (this._ctx) this._ctx.filter = 'none'
@@ -848,7 +965,7 @@ export default class JASSUB extends EventTarget {
    * Destroy the object, worker, listeners and all data.
    * @param  {String|Error} [err] Error to throw when destroying.
    */
-  destroy (err) {
+  destroy(err) {
     if (err) err = this._error(err)
     if (this._video && this._canvasParent) this._video.parentNode?.removeChild(this._canvasParent)
     this._destroyed = true

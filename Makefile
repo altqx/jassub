@@ -85,12 +85,15 @@ $(DIST_DIR)/lib/libbrotlicommon.a: build/lib/brotli/configured
 	cd build/lib/brotli && \
 	$(call CONFIGURE_CMAKE) && \
 	$(JSO_MAKE) install
-	# Normalise static lib names
+	# Normalise static lib names (Only if they exist)
 	cd $(DIST_DIR)/lib/ && \
-	for lib in *-static.a ; do mv "$$lib" "$${lib%-static.a}.a" ; done
+	for lib in *-static.a ; do \
+		if [ -f "$$lib" ]; then \
+			mv "$$lib" "$${lib%-static.a}.a" ; \
+		fi \
+	done || true
 
-
-# Freetype without Harfbuzz
+# Freetype without Harfbuzz (Bootstrap)
 build/lib/freetype/configure: lib/freetype $(wildcard $(BASE_DIR)build/patches/freetype/*.patch)
 	$(call PREPARE_SRC_PATCHED,freetype)
 	cd build/lib/freetype && $(RECONF_AUTO)
@@ -103,32 +106,49 @@ build/lib/freetype/build_hb/dist_hb/lib/libfreetype.a: $(DIST_DIR)/lib/libbrotli
 			--prefix="$$(pwd)/dist_hb" \
 			--with-brotli=yes \
 			--without-harfbuzz \
+			--without-zlib \
+			--without-png \
 		&& \
 		$(JSO_MAKE) install
 
-# Harfbuzz
-build/lib/harfbuzz/configure: lib/harfbuzz $(wildcard $(BASE_DIR)build/patches/harfbuzz/*.patch)
+# Harfbuzz (CMake)
+build/lib/harfbuzz/configured: lib/harfbuzz $(wildcard $(BASE_DIR)build/patches/harfbuzz/*.patch)
 	$(call PREPARE_SRC_PATCHED,harfbuzz)
-	cd build/lib/harfbuzz && $(RECONF_AUTO)
+	touch build/lib/harfbuzz/configured
 
-$(DIST_DIR)/lib/libharfbuzz.a: build/lib/freetype/build_hb/dist_hb/lib/libfreetype.a build/lib/harfbuzz/configure
+$(DIST_DIR)/lib/libharfbuzz.a: build/lib/freetype/build_hb/dist_hb/lib/libfreetype.a build/lib/harfbuzz/configured
 	cd build/lib/harfbuzz && \
+	mkdir -p build_cmake && \
+	cd build_cmake && \
 	EM_PKG_CONFIG_PATH=$(PKG_CONFIG_PATH):$(BASE_DIR)build/lib/freetype/build_hb/dist_hb/lib/pkgconfig \
 	CFLAGS="-DHB_NO_MT $(CFLAGS)" \
 	CXXFLAGS="-DHB_NO_MT $(CFLAGS)" \
-	$(call CONFIGURE_AUTO) \
-		--with-freetype \
+	emcmake cmake -S ".." \
+		-DCMAKE_INSTALL_PREFIX="$(DIST_DIR)" \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DFREETYPE_INCLUDE_DIRS="$(BASE_DIR)build/lib/freetype/build_hb/dist_hb/include/freetype2" \
+		-DFREETYPE_LIBRARY="$(BASE_DIR)build/lib/freetype/build_hb/dist_hb/lib/libfreetype.a" \
+		-DHB_HAVE_FREETYPE=ON \
+		-DHB_BUILD_TESTS=OFF \
+		-DHB_BUILD_UTILS=OFF \
+		-DHB_BUILD_SUBSET=OFF \
 	&& \
-	cd src && \
-	$(JSO_MAKE) install-libLTLIBRARIES install-pkgincludeHEADERS install-pkgconfigDATA
+	emmake make -j "$$(nproc)" install
 
 # Freetype with Harfbuzz
 $(DIST_DIR)/lib/libfreetype.a: $(DIST_DIR)/lib/libharfbuzz.a $(DIST_DIR)/lib/libbrotlidec.a
 	cd build/lib/freetype && \
-	EM_PKG_CONFIG_PATH=$(PKG_CONFIG_PATH):$(BASE_DIR)build/lib/freetype/build_hb/dist_hb/lib/pkgconfig \
+	EM_PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) \
+	CFLAGS="-O3 -flto -fno-rtti -fno-exceptions -s USE_PTHREADS=0 -I$(DIST_DIR)/include/harfbuzz" \
+	CXXFLAGS="-O3 -flto -fno-rtti -fno-exceptions -s USE_PTHREADS=0 -I$(DIST_DIR)/include/harfbuzz" \
+	LDFLAGS="-L$(DIST_DIR)/lib" \
+	HARFBUZZ_CFLAGS="-I$(DIST_DIR)/include/harfbuzz" \
+	HARFBUZZ_LIBS="-L$(DIST_DIR)/lib -lharfbuzz -L$(BASE_DIR)build/lib/freetype/build_hb/dist_hb/lib -lfreetype" \
 	$(call CONFIGURE_AUTO) \
 		--with-brotli=yes \
-		--with-harfbuzz \
+		--with-harfbuzz=yes \
+		--without-zlib \
+		--without-png \
 	&& \
 	$(JSO_MAKE) install
 
@@ -155,8 +175,23 @@ build/lib/libass/configured: lib/libass
 	touch build/lib/libass/configured
 
 $(DIST_DIR)/lib/libass.a: $(DIST_DIR)/lib/libharfbuzz.a $(DIST_DIR)/lib/libfribidi.a $(DIST_DIR)/lib/libfreetype.a $(DIST_DIR)/lib/libbrotlidec.a build/lib/libass/configured
+	# Remove broken .la files that contain invalid paths from previous steps
+	rm -f $(DIST_DIR)/lib/*.la
 	cd build/lib/libass && \
+	EM_PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) \
+	FREETYPE_CFLAGS="-I$(DIST_DIR)/include/freetype2" \
+	FREETYPE_LIBS="-L$(DIST_DIR)/lib -lfreetype" \
+	FRIBIDI_CFLAGS="-I$(DIST_DIR)/include/fribidi" \
+	FRIBIDI_LIBS="-L$(DIST_DIR)/lib -lfribidi" \
+	HARFBUZZ_CFLAGS="-I$(DIST_DIR)/include/harfbuzz" \
+	HARFBUZZ_LIBS="-L$(DIST_DIR)/lib -lharfbuzz" \
 	$(call CONFIGURE_AUTO,../../../lib/libass) \
+		--prefix="$(DIST_DIR)" \
+		--host=wasm32-unknown-emscripten \
+		--enable-static \
+		--disable-shared \
+		--disable-debug \
+		--enable-optimize \
 		--enable-large-tiles \
 		--disable-fontconfig \
 		--disable-require-system-font-provider \
@@ -203,22 +238,23 @@ SIZE_ARGS = \
 # args that are required for this to even work at all
 COMPAT_ARGS = \
 		-s EXPORTED_FUNCTIONS="['_malloc']" \
-		-s EXPORT_KEEPALIVE=1 \
 		-s EXPORTED_RUNTIME_METHODS="['getTempRet0', 'setTempRet0']" \
 		-s IMPORTED_MEMORY=1 \
 		-s MIN_CHROME_VERSION=27 \
 		-s MIN_SAFARI_VERSION=60005 \
 		-mbulk-memory \
-		--memory-init-file 0 
+		--memory-init-file 0
 
-dist/js/$(WORKER_NAME).js: src/JASSUB.cpp src/worker.js src/pre-worker.js
+dist/js/$(WORKER_NAME).js: src/JASSUB.cpp src/worker.js src/pre-worker.js src/post-worker.js
 	mkdir -p dist/js
 	emcc src/JASSUB.cpp $(LIBASS_DEPS) \
 		$(WORKER_ARGS) \
 		$(PERFORMANCE_ARGS) \
 		$(SIZE_ARGS) \
 		$(COMPAT_ARGS) \
+		--closure=0 \
 		--pre-js src/pre-worker.js \
+		--post-js src/post-worker.js \
 		-s ENVIRONMENT=worker \
 		-s EXIT_RUNTIME=0 \
 		-s WASM_BIGINT=0 \
@@ -227,6 +263,18 @@ dist/js/$(WORKER_NAME).js: src/JASSUB.cpp src/worker.js src/pre-worker.js
 		-s EXPORT_ES6=1 \
 		-lembind \
 		-o $@
+
+.PHONY: worker worker-modern workers
+
+worker:
+	$(MAKE) MODERN=0 dist/js/jassub-worker.js
+
+worker-modern:
+	$(MAKE) MODERN=1 dist/js/jassub-worker-modern.js
+
+workers:
+	$(MAKE) worker
+	$(MAKE) worker-modern
 
 dist/js/jassub.js: src/jassub.js
 	mkdir -p dist/js

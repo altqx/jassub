@@ -22,50 +22,69 @@ if (!Uint8Array.prototype.slice) {
   }
 }
 
-function toAbsoluteIndex (index, length) {
+function toAbsoluteIndex(index, length) {
   const integer = index >> 0
   return integer < 0 ? Math.max(integer + length, 0) : Math.min(integer, length)
 }
 
 if (!Uint8Array.prototype.fill) {
-  Int8Array.prototype.fill = Int16Array.prototype.fill = Int32Array.prototype.fill = Uint8Array.prototype.fill = Uint16Array.prototype.fill = Uint32Array.prototype.fill = Float32Array.prototype.fill = Float64Array.prototype.fill = Array.prototype.fill = function (value) {
-    if (this == null) throw new TypeError('this is null or not defined')
+  Int8Array.prototype.fill =
+    Int16Array.prototype.fill =
+    Int32Array.prototype.fill =
+    Uint8Array.prototype.fill =
+    Uint16Array.prototype.fill =
+    Uint32Array.prototype.fill =
+    Float32Array.prototype.fill =
+    Float64Array.prototype.fill =
+    Array.prototype.fill =
+      function (value) {
+        if (this == null) throw new TypeError('this is null or not defined')
 
-    const O = Object(this)
+        const O = Object(this)
 
-    const length = O.length >>> 0
+        const length = O.length >>> 0
 
-    const argumentsLength = arguments.length
-    let index = toAbsoluteIndex(argumentsLength > 1 ? arguments[1] : undefined, length)
-    const end = argumentsLength > 2 ? arguments[2] : undefined
-    const endPos = end === undefined ? length : toAbsoluteIndex(end, length)
-    while (endPos > index) O[index++] = value
-    return O
-  }
+        const argumentsLength = arguments.length
+        let index = toAbsoluteIndex(argumentsLength > 1 ? arguments[1] : undefined, length)
+        const end = argumentsLength > 2 ? arguments[2] : undefined
+        const endPos = end === undefined ? length : toAbsoluteIndex(end, length)
+        while (endPos > index) O[index++] = value
+        return O
+      }
 }
 
 if (!Uint8Array.prototype.copyWithin) {
-  Int8Array.prototype.copyWithin = Int16Array.prototype.copyWithin = Int32Array.prototype.copyWithin = Uint8Array.prototype.copyWithin = Uint16Array.prototype.copyWithin = Uint32Array.prototype.copyWithin = Float32Array.prototype.copyWithin = Float64Array.prototype.copyWithin = Array.prototype.copyWithin = function (target, start) {
-    const O = Object(this)
-    const len = O.length >>> 0
+  Int8Array.prototype.copyWithin =
+    Int16Array.prototype.copyWithin =
+    Int32Array.prototype.copyWithin =
+    Uint8Array.prototype.copyWithin =
+    Uint16Array.prototype.copyWithin =
+    Uint32Array.prototype.copyWithin =
+    Float32Array.prototype.copyWithin =
+    Float64Array.prototype.copyWithin =
+    Array.prototype.copyWithin =
+      function (target, start) {
+        const O = Object(this)
+        const len = O.length >>> 0
 
-    let to = toAbsoluteIndex(target, len)
-    let from = toAbsoluteIndex(start, len)
-    const end = arguments.length > 2 ? arguments[2] : undefined
-    let count = Math.min((end === undefined ? len : toAbsoluteIndex(end, len)) - from, len - to)
-    let inc = 1
-    if (from < to && to < from + count) {
-      inc = -1
-      from += count - 1
-      to += count - 1
-    }
-    while (count-- > 0) {
-      if (from in O) O[to] = O[from]
-      else delete O[to]
-      to += inc
-      from += inc
-    } return O
-  }
+        let to = toAbsoluteIndex(target, len)
+        let from = toAbsoluteIndex(start, len)
+        const end = arguments.length > 2 ? arguments[2] : undefined
+        let count = Math.min((end === undefined ? len : toAbsoluteIndex(end, len)) - from, len - to)
+        let inc = 1
+        if (from < to && to < from + count) {
+          inc = -1
+          from += count - 1
+          to += count - 1
+        }
+        while (count-- > 0) {
+          if (from in O) O[to] = O[from]
+          else delete O[to]
+          to += inc
+          from += inc
+        }
+        return O
+      }
 }
 
 if (!Date.now) Date.now = () => new Date().getTime()
@@ -109,7 +128,9 @@ if (promiseSupported) {
   try {
     let res
     // eslint-disable-next-line no-new
-    new Promise(resolve => { res = resolve })
+    new Promise((resolve) => {
+      res = resolve
+    })
     res()
   } catch (error) {
     promiseSupported = false
@@ -122,8 +143,8 @@ if (!promiseSupported) {
   // @ts-ignore
   self.Promise = function (cb) {
     let then = () => {}
-    cb(a => setTimeout(() => then(a), 0))
-    return { then: fn => then = fn }
+    cb((a) => setTimeout(() => then(a), 0))
+    return { then: (fn) => (then = fn) }
   }
 }
 
@@ -163,11 +184,39 @@ let debug
 self.width = 0
 self.height = 0
 
+// Performance metrics for real-time monitoring
+const metrics = {
+  framesRendered: 0,
+  framesDropped: 0,
+  totalRenderTime: 0,
+  maxRenderTime: 0,
+  minRenderTime: Infinity,
+  lastRenderTime: 0,
+  renderStartTime: 0,
+  pendingRenders: 0,
+  totalEvents: 0,
+  currentEventIndex: 0,
+  cacheHits: 0,
+  cacheMisses: 0
+}
+
+// Reset metrics
+const resetMetrics = () => {
+  metrics.framesRendered = 0
+  metrics.framesDropped = 0
+  metrics.totalRenderTime = 0
+  metrics.maxRenderTime = 0
+  metrics.minRenderTime = Infinity
+  metrics.lastRenderTime = 0
+  metrics.cacheHits = 0
+  metrics.cacheMisses = 0
+}
+
 let asyncRender = false
 
 self.addFont = ({ font }) => asyncWrite(font)
 
-const findAvailableFonts = font => {
+const findAvailableFonts = (font) => {
   font = font.trim().toLowerCase()
 
   if (font.startsWith('@')) font = font.substring(1)
@@ -183,28 +232,41 @@ const findAvailableFonts = font => {
   }
 }
 
-const asyncWrite = font => {
+const asyncWrite = (font) => {
   if (typeof font === 'string') {
-    readAsync(font, fontData => {
-      allocFont(new Uint8Array(fontData))
-    }, console.error)
+    readAsync(
+      font,
+      (fontData) => {
+        allocFont(new Uint8Array(fontData))
+      },
+      console.error
+    )
   } else {
     allocFont(font)
   }
 }
 
-// TODO: this should re-draw last frame!
-const allocFont = uint8 => {
-  const ptr = _malloc(uint8.byteLength)
-  self.HEAPU8.set(uint8, ptr)
-  jassubObj.addFont('font-' + (fontId++), ptr, uint8.byteLength)
-  jassubObj.reloadFonts()
+// Debounced font reload to batch font additions
+let pendingFontReload = null
+const scheduleReloadFonts = () => {
+  if (pendingFontReload) return
+  pendingFontReload = setTimeout(() => {
+    pendingFontReload = null
+    if (jassubObj) jassubObj.reloadFonts()
+  }, 16) // ~1 frame at 60fps
 }
 
-const processAvailableFonts = content => {
-  if (!availableFonts) return
+const allocFont = (uint8) => {
+  const ptr = _malloc(uint8.byteLength)
+  self.HEAPU8.set(uint8, ptr)
+  jassubObj.addFont('font-' + fontId++, ptr, uint8.byteLength)
+  scheduleReloadFonts() // Debounced instead of immediate reload
+}
 
-  const sections = parseAss(content)
+// Parses only the Styles section (not Events) to detect fonts faster.
+const processAvailableFonts = (content) => {
+  if (!availableFonts) return
+  const sections = parseAss(content, true)
 
   for (let i = 0; i < sections.length; i++) {
     for (let j = 0; j < sections[i].body.length; j++) {
@@ -214,10 +276,14 @@ const processAvailableFonts = content => {
     }
   }
 
-  const regex = /\\fn([^\\}]*?)[\\}]/g
-  let matches
-  while ((matches = regex.exec(content)) !== null) {
-    findAvailableFonts(matches[1])
+  // Use matchAll for better performance on Events section
+  const eventsMatch = content.match(/\[Events\][\s\S]*/i)
+  if (eventsMatch) {
+    const eventsContent = eventsMatch[0]
+    const fnMatches = eventsContent.matchAll(/\\fn([^\\}]*?)[\\}]/g)
+    for (const match of fnMatches) {
+      findAvailableFonts(match[1])
+    }
   }
 }
 /**
@@ -259,13 +325,13 @@ const getCurrentTime = () => {
     return lastCurrentTime
   } else {
     if (diff > 5) {
-      console.error('Didn\'t received currentTime > 5 seconds. Assuming video was paused.')
+      console.error("Didn\'t received currentTime > 5 seconds. Assuming video was paused.")
       setIsPaused(true)
     }
-    return lastCurrentTime + (diff * rate)
+    return lastCurrentTime + diff * rate
   }
 }
-const setCurrentTime = currentTime => {
+const setCurrentTime = (currentTime) => {
   lastCurrentTime = currentTime
   lastCurrentTimeReceivedAt = Date.now()
   if (!rafId) {
@@ -283,7 +349,7 @@ const setCurrentTime = currentTime => {
 }
 
 let _isPaused = true
-const setIsPaused = isPaused => {
+const setIsPaused = (isPaused) => {
   if (isPaused !== _isPaused) {
     _isPaused = isPaused
     if (isPaused) {
@@ -308,7 +374,34 @@ const libassYCbCrMap = [null, a, null, a, a, b, b, c, c, d, d]
 const render = (time, force) => {
   const times = {}
   const renderStartTime = performance.now()
-  const renderResult = blendMode === 'wasm' ? jassubObj.renderBlend(time, force || 0) : jassubObj.renderImage(time, force || 0)
+  metrics.renderStartTime = renderStartTime
+  metrics.pendingRenders++
+
+  const renderResult =
+    blendMode === 'wasm' ? jassubObj.renderBlend(time, force || 0) : jassubObj.renderImage(time, force || 0)
+
+  // Update metrics
+  const renderEndTime = performance.now()
+  const renderDuration = renderEndTime - renderStartTime
+  metrics.lastRenderTime = renderDuration
+  metrics.totalRenderTime += renderDuration
+  metrics.maxRenderTime = Math.max(metrics.maxRenderTime, renderDuration)
+  if (renderDuration > 0) {
+    metrics.minRenderTime = Math.min(metrics.minRenderTime, renderDuration)
+  }
+
+  if (jassubObj.changed !== 0 || force) {
+    metrics.framesRendered++
+    metrics.cacheMisses++
+  } else {
+    metrics.cacheHits++
+  }
+
+  // Update event count from WASM
+  if (jassubObj && jassubObj.getEventCount) {
+    metrics.totalEvents = jassubObj.getEventCount()
+  }
+
   if (debug) {
     const decodeEndTime = performance.now()
     const renderEndTime = jassubObj.time
@@ -325,14 +418,21 @@ const render = (time, force) => {
     if (asyncRender) {
       const promises = []
       for (let result = renderResult, i = 0; i < jassubObj.count; result = result.next, ++i) {
-        const reassigned = { w: result.w, h: result.h, x: result.x, y: result.y }
+        const reassigned = {
+          w: result.w,
+          h: result.h,
+          x: result.x,
+          y: result.y
+        }
         const pointer = result.image
-        const data = hasBitmapBug ? self.HEAPU8C.slice(pointer, pointer + reassigned.w * reassigned.h * 4) : self.HEAPU8C.subarray(pointer, pointer + reassigned.w * reassigned.h * 4)
+        const data = hasBitmapBug
+          ? self.HEAPU8C.slice(pointer, pointer + reassigned.w * reassigned.h * 4)
+          : self.HEAPU8C.subarray(pointer, pointer + reassigned.w * reassigned.h * 4)
         promises.push(createImageBitmap(new ImageData(data, reassigned.w, reassigned.h)))
         images.push(reassigned)
       }
       // use callback to not rely on async/await
-      Promise.all(promises).then(bitmaps => {
+      Promise.all(promises).then((bitmaps) => {
         for (let i = 0; i < images.length; i++) {
           images[i].image = bitmaps[i]
         }
@@ -341,7 +441,13 @@ const render = (time, force) => {
       })
     } else {
       for (let image = renderResult, i = 0; i < jassubObj.count; image = image.next, ++i) {
-        const reassigned = { w: image.w, h: image.h, x: image.x, y: image.y, image: image.image }
+        const reassigned = {
+          w: image.w,
+          h: image.h,
+          x: image.x,
+          y: image.y,
+          image: image.image
+        }
         if (!offCanvasCtx) {
           const buf = self.wasmMemory.buffer.slice(image.image, image.image + image.w * image.h * 4)
           buffers.push(buf)
@@ -363,7 +469,7 @@ self.demand = ({ time }) => {
   render(time)
 }
 
-const renderLoop = force => {
+const renderLoop = (force) => {
   rafId = 0
   render(getCurrentTime(), force)
   if (!_isPaused) {
@@ -372,6 +478,8 @@ const renderLoop = force => {
 }
 
 const paintImages = ({ times, images, buffers }) => {
+  metrics.pendingRenders--
+
   const resultObject = {
     target: 'render',
     asyncRender,
@@ -396,7 +504,11 @@ const paintImages = ({ times, images, buffers }) => {
         } else {
           bufferCanvas.width = image.w
           bufferCanvas.height = image.h
-          bufferCtx.putImageData(new ImageData(self.HEAPU8C.subarray(image.image, image.image + image.w * image.h * 4), image.w, image.h), 0, 0)
+          bufferCtx.putImageData(
+            new ImageData(self.HEAPU8C.subarray(image.image, image.image + image.w * image.h * 4), image.w, image.h),
+            0,
+            0
+          )
           offCanvasCtx.drawImage(bufferCanvas, image.x, image.y)
         }
       }
@@ -429,14 +541,19 @@ const paintImages = ({ times, images, buffers }) => {
 /**
  * Parse the content of an .ass file.
  * @param {!string} content the content of the file
+ * @param {boolean} stopAtEvents if true, stop parsing when [Events] section is reached
  */
-const parseAss = content => {
+const parseAss = (content, stopAtEvents = false) => {
   let m, format, lastPart, parts, key, value, tmp, i, j, body
   const sections = []
   const lines = content.split(/[\r\n]+/g)
   for (i = 0; i < lines.length; i++) {
     m = lines[i].match(/^\[(.*)\]$/)
     if (m) {
+      // Early termination for font detection performance
+      if (stopAtEvents && m[1].toLowerCase() === 'events') {
+        break
+      }
       format = null
       sections.push({
         name: m[1],
@@ -462,7 +579,7 @@ const parseAss = content => {
             value = value.slice(0, format.length - 1)
             value.push(lastPart)
           }
-          value = value.map(s => {
+          value = value.map((s) => {
             return s.trim()
           })
           if (format) {
@@ -489,20 +606,21 @@ const parseAss = content => {
 
 const blurRegex = /\\blur(?:[0-9]+\.)?[0-9]+/gm
 
-const dropBlur = subContent => {
+const dropBlur = (subContent) => {
   return subContent.replace(blurRegex, '')
 }
 
 const requestAnimationFrame = (() => {
   // similar to Browser.requestAnimationFrame
   let nextRAF = 0
-  return func => {
+  return (func) => {
     // try to keep target fps (30fps) between calls to here
     const now = Date.now()
     if (nextRAF === 0) {
       nextRAF = now + 1000 / targetFps
     } else {
-      while (now + 2 >= nextRAF) { // fudge a little, to avoid timer jitter causing us to do lots of delay:0
+      while (now + 2 >= nextRAF) {
+        // fudge a little, to avoid timer jitter causing us to do lots of delay:0
         nextRAF += 1000 / targetFps
       }
     }
@@ -528,11 +646,12 @@ let dropAllBlur
 let _malloc
 let hasBitmapBug
 
-self.init = data => {
+self.init = (data) => {
   hasBitmapBug = data.hasBitmapBug
   try {
     const module = new WebAssembly.Module(Uint8Array.of(0x0, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00))
-    if (!(module instanceof WebAssembly.Module) || !(new WebAssembly.Instance(module) instanceof WebAssembly.Instance)) throw new Error('WASM not supported')
+    if (!(module instanceof WebAssembly.Module) || !(new WebAssembly.Instance(module) instanceof WebAssembly.Instance))
+      throw new Error('WASM not supported')
   } catch (e) {
     console.warn(e)
     // load WASM2JS code if WASM is unsupported
@@ -543,9 +662,11 @@ self.init = data => {
   // @ts-ignore
   if (WebAssembly.instantiateStreaming) {
     const _fetch = self.fetch
-    self.fetch = _ => _fetch(data.wasmUrl)
+    self.fetch = (_) => _fetch(data.wasmUrl)
   }
-  WASM({ wasm: !WebAssembly.instantiateStreaming && read_(data.wasmUrl, true) }).then((/** @type {EmscriptenModule} */Module) => {
+  WASM({
+    wasm: !WebAssembly.instantiateStreaming && read_(data.wasmUrl, true)
+  }).then((/** @type {EmscriptenModule} */ Module) => {
     _malloc = Module._malloc
     self.width = data.width
     self.height = data.height
@@ -634,8 +755,21 @@ self.createEvent = ({ event }) => {
 self.getEvents = () => {
   const events = []
   for (let i = 0; i < jassubObj.getEventCount(); i++) {
-    const { Start, Duration, ReadOrder, Layer, Style, MarginL, MarginR, MarginV, Name, Text, Effect } = jassubObj.getEvent(i)
-    events.push({ Start, Duration, ReadOrder, Layer, Style, MarginL, MarginR, MarginV, Name, Text, Effect })
+    const { Start, Duration, ReadOrder, Layer, Style, MarginL, MarginR, MarginV, Name, Text, Effect } =
+      jassubObj.getEvent(i)
+    events.push({
+      Start,
+      Duration,
+      ReadOrder,
+      Layer,
+      Style,
+      MarginL,
+      MarginR,
+      MarginV,
+      Name,
+      Text,
+      Effect
+    })
   }
   postMessage({
     target: 'getEvents',
@@ -661,9 +795,63 @@ self.getStyles = () => {
   const styles = []
   for (let i = 0; i < jassubObj.getStyleCount(); i++) {
     // eslint-disable-next-line camelcase
-    const { Name, FontName, FontSize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding, treat_fontname_as_pattern, Blur, Justify } = jassubObj.getStyle(i)
+    const {
+      Name,
+      FontName,
+      FontSize,
+      PrimaryColour,
+      SecondaryColour,
+      OutlineColour,
+      BackColour,
+      Bold,
+      Italic,
+      Underline,
+      StrikeOut,
+      ScaleX,
+      ScaleY,
+      Spacing,
+      Angle,
+      BorderStyle,
+      Outline,
+      Shadow,
+      Alignment,
+      MarginL,
+      MarginR,
+      MarginV,
+      Encoding,
+      treat_fontname_as_pattern,
+      Blur,
+      Justify
+    } = jassubObj.getStyle(i)
     // eslint-disable-next-line camelcase
-    styles.push({ Name, FontName, FontSize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding, treat_fontname_as_pattern, Blur, Justify })
+    styles.push({
+      Name,
+      FontName,
+      FontSize,
+      PrimaryColour,
+      SecondaryColour,
+      OutlineColour,
+      BackColour,
+      Bold,
+      Italic,
+      Underline,
+      StrikeOut,
+      ScaleX,
+      ScaleY,
+      Spacing,
+      Angle,
+      BorderStyle,
+      Outline,
+      Shadow,
+      Alignment,
+      MarginL,
+      MarginR,
+      MarginV,
+      Encoding,
+      treat_fontname_as_pattern,
+      Blur,
+      Justify
+    })
   }
   postMessage({
     target: 'getStyles',
@@ -690,6 +878,32 @@ self.disableStyleOverride = () => {
 
 self.defaultFont = ({ font }) => {
   jassubObj.setDefaultFont(font)
+}
+
+// Performance metrics API
+self.getStats = () => {
+  const avgRenderTime = metrics.framesRendered > 0 ? metrics.totalRenderTime / metrics.framesRendered : 0
+
+  postMessage({
+    target: 'getStats',
+    stats: {
+      framesRendered: metrics.framesRendered,
+      framesDropped: metrics.framesDropped,
+      avgRenderTime: Math.round(avgRenderTime * 100) / 100,
+      maxRenderTime: Math.round(metrics.maxRenderTime * 100) / 100,
+      minRenderTime: metrics.minRenderTime === Infinity ? 0 : Math.round(metrics.minRenderTime * 100) / 100,
+      lastRenderTime: Math.round(metrics.lastRenderTime * 100) / 100,
+      pendingRenders: Math.max(0, metrics.pendingRenders),
+      totalEvents: metrics.totalEvents,
+      cacheHits: metrics.cacheHits,
+      cacheMisses: metrics.cacheMisses
+    }
+  })
+}
+
+self.resetStats = () => {
+  resetMetrics()
+  postMessage({ target: 'resetStats', success: true })
 }
 
 onmessage = ({ data }) => {
