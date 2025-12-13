@@ -658,15 +658,23 @@ self.init = (data) => {
     // eslint-disable-next-line no-eval
     eval(read_(data.legacyWasmUrl))
   }
-  // hack, we want custom WASM URLs
-  // @ts-ignore
-  if (WebAssembly.instantiateStreaming) {
-    const _fetch = self.fetch
-    self.fetch = (_) => _fetch(data.wasmUrl)
+
+  const _fetch = self.fetch
+  const setWasmUrl = (wasmUrl) => {
+    // @ts-ignore
+    if (WebAssembly.instantiateStreaming) {
+      self.fetch = (_) => _fetch(wasmUrl)
+    }
   }
-  WASM({
-    wasm: !WebAssembly.instantiateStreaming && read_(data.wasmUrl, true)
-  }).then((/** @type {EmscriptenModule} */ Module) => {
+
+  const loadWasm = (wasmUrl) => {
+    setWasmUrl(wasmUrl)
+    return WASM({
+      wasm: !WebAssembly.instantiateStreaming && read_(wasmUrl, true)
+    })
+  }
+
+  const onWasmLoaded = (/** @type {EmscriptenModule} */ Module) => {
     _malloc = Module._malloc
     self.width = data.width
     self.height = data.height
@@ -711,7 +719,17 @@ self.init = (data) => {
 
     postMessage({ target: 'ready' })
     postMessage({ target: 'verifyColorSpace', subtitleColorSpace })
-  })
+  }
+
+  loadWasm(data.wasmUrl)
+    .then(onWasmLoaded)
+    .catch((e) => {
+      if (data.fallbackWasmUrl && data.fallbackWasmUrl !== data.wasmUrl) {
+        console.warn('Failed to load selected WASM, falling back', e)
+        return loadWasm(data.fallbackWasmUrl).then(onWasmLoaded)
+      }
+      throw e
+    })
 }
 
 self.offscreenCanvas = ({ transferable }) => {

@@ -63,6 +63,7 @@ class o extends EventTarget {
    * @param {String} [options.wasmUrl='jassub-worker.wasm'] The URL of the worker WASM.
    * @param {String} [options.legacyWasmUrl='jassub-worker.wasm.js'] The URL of the worker WASM. Only loaded if the browser doesn't support WASM.
    * @param {String} options.modernWasmUrl The URL of the modern worker WASM. This includes faster ASM instructions, but is only supported by newer browsers, disabled if the URL isn't defined.
+   * @param {Boolean} [options.forceModernWasmUrl=false] Force using modernWasmUrl (skips SIMD detection). If unsupported by the browser, the worker will fall back to wasmUrl.
    * @param {String} [options.subUrl=options.subContent] The URL of the subtitle file to play.
    * @param {String} [options.subContent=options.subUrl] The content of the subtitle file to play.
    * @param {String[]|Uint8Array[]} [options.fonts] An array of links or Uint8Arrays to the fonts used in the subtitle. If Uint8Array is used the array is copied, not referenced. This forces all the fonts in this array to be loaded by the renderer, regardless of if they are used.
@@ -89,9 +90,11 @@ class o extends EventTarget {
     if (this._bufferCanvas = document.createElement("canvas"), this._bufferCtx = this._bufferCanvas.getContext("2d"), !this._bufferCtx)
       throw this.destroy("Canvas rendering not supported");
     this._canvasctrl = this._offscreenRender ? this._canvas.transferControlToOffscreen() : this._canvas, this._ctx = !this._offscreenRender && this._canvasctrl.getContext("2d"), this._lastRenderTime = 0, this.debug = !!e.debug, this.prescaleFactor = e.prescaleFactor || 1, this.prescaleHeightLimit = e.prescaleHeightLimit || 1080, this.maxRenderHeight = e.maxRenderHeight || 0, this._boundResize = this.resize.bind(this), this._boundTimeUpdate = this._timeupdate.bind(this), this._boundSetRate = this.setRate.bind(this), this._boundUpdateColorSpace = this._updateColorSpace.bind(this), this._video && this.setVideo(e.video), this._onDemandRender && (this.busy = !1, this._lastDemandTime = null), this._worker = new Worker(e.workerUrl || "jassub-worker.js"), this._worker.onmessage = (s) => this._onmessage(s), this._worker.onerror = (s) => this._error(s), t.then(() => {
+      const s = e.wasmUrl ?? "jassub-worker.wasm", i = e.forceModernWasmUrl && e.modernWasmUrl || o._supportsSIMD && e.modernWasmUrl ? e.modernWasmUrl : s;
       this._worker.postMessage({
         target: "init",
-        wasmUrl: o._supportsSIMD && e.modernWasmUrl ? e.modernWasmUrl : e.wasmUrl ?? "jassub-worker.wasm",
+        wasmUrl: i,
+        fallbackWasmUrl: s,
         legacyWasmUrl: e.legacyWasmUrl ?? "jassub-worker.wasm.js",
         asyncRender: typeof createImageBitmap < "u" && (e.asyncRender ?? !0),
         onDemandRender: this._onDemandRender,
@@ -132,41 +135,63 @@ class o extends EventTarget {
   static _testSIMD() {
     if (o._supportsSIMD === null)
       try {
-        o._supportsSIMD = WebAssembly.validate(
-          Uint8Array.of(
-            0,
-            97,
-            115,
-            109,
-            1,
-            0,
-            0,
-            0,
-            1,
-            5,
-            1,
-            96,
-            0,
-            1,
-            123,
-            3,
-            2,
-            1,
-            0,
-            10,
-            10,
-            1,
-            8,
-            0,
-            65,
-            0,
-            253,
-            15,
-            253,
-            98,
-            11
-          )
+        if (typeof WebAssembly != "object" || typeof WebAssembly.validate != "function") {
+          o._supportsSIMD = !1;
+          return;
+        }
+        const e = Uint8Array.of(
+          0,
+          97,
+          115,
+          109,
+          1,
+          0,
+          0,
+          0,
+          1,
+          5,
+          1,
+          96,
+          0,
+          1,
+          123,
+          3,
+          2,
+          1,
+          0,
+          10,
+          22,
+          1,
+          20,
+          0,
+          253,
+          12,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          11
         );
+        let t = WebAssembly.validate(e);
+        if (t)
+          try {
+            new WebAssembly.Module(e);
+          } catch {
+            t = !1;
+          }
+        o._supportsSIMD = t;
       } catch {
         o._supportsSIMD = !1;
       }

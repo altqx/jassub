@@ -49,6 +49,7 @@ export default class JASSUB extends EventTarget {
    * @param {String} [options.wasmUrl='jassub-worker.wasm'] The URL of the worker WASM.
    * @param {String} [options.legacyWasmUrl='jassub-worker.wasm.js'] The URL of the worker WASM. Only loaded if the browser doesn't support WASM.
    * @param {String} options.modernWasmUrl The URL of the modern worker WASM. This includes faster ASM instructions, but is only supported by newer browsers, disabled if the URL isn't defined.
+   * @param {Boolean} [options.forceModernWasmUrl=false] Force using modernWasmUrl (skips SIMD detection). If unsupported by the browser, the worker will fall back to wasmUrl.
    * @param {String} [options.subUrl=options.subContent] The URL of the subtitle file to play.
    * @param {String} [options.subContent=options.subUrl] The content of the subtitle file to play.
    * @param {String[]|Uint8Array[]} [options.fonts] An array of links or Uint8Arrays to the fonts used in the subtitle. If Uint8Array is used the array is copied, not referenced. This forces all the fonts in this array to be loaded by the renderer, regardless of if they are used.
@@ -126,12 +127,18 @@ export default class JASSUB extends EventTarget {
     this._worker.onerror = (e) => this._error(e)
 
     test.then(() => {
+      const fallbackWasmUrl = options.wasmUrl ?? 'jassub-worker.wasm'
+      const selectedWasmUrl =
+        options.forceModernWasmUrl && options.modernWasmUrl
+          ? options.modernWasmUrl
+          : JASSUB._supportsSIMD && options.modernWasmUrl
+            ? options.modernWasmUrl
+            : fallbackWasmUrl
+
       this._worker.postMessage({
         target: 'init',
-        wasmUrl:
-          JASSUB._supportsSIMD && options.modernWasmUrl
-            ? options.modernWasmUrl
-            : options.wasmUrl ?? 'jassub-worker.wasm',
+        wasmUrl: selectedWasmUrl,
+        fallbackWasmUrl,
         legacyWasmUrl: options.legacyWasmUrl ?? 'jassub-worker.wasm.js',
         asyncRender: typeof createImageBitmap !== 'undefined' && (options.asyncRender ?? true),
         onDemandRender: this._onDemandRender,
@@ -183,41 +190,68 @@ export default class JASSUB extends EventTarget {
     if (JASSUB._supportsSIMD !== null) return
 
     try {
-      JASSUB._supportsSIMD = WebAssembly.validate(
-        Uint8Array.of(
-          0,
-          97,
-          115,
-          109,
-          1,
-          0,
-          0,
-          0,
-          1,
-          5,
-          1,
-          96,
-          0,
-          1,
-          123,
-          3,
-          2,
-          1,
-          0,
-          10,
-          10,
-          1,
-          8,
-          0,
-          65,
-          0,
-          253,
-          15,
-          253,
-          98,
-          11
-        )
+      if (typeof WebAssembly !== 'object' || typeof WebAssembly.validate !== 'function') {
+        JASSUB._supportsSIMD = false
+        return
+      }
+
+      const simdProbe = Uint8Array.of(
+        0x00,
+        0x61,
+        0x73,
+        0x6d,
+        0x01,
+        0x00,
+        0x00,
+        0x00,
+        0x01,
+        0x05,
+        0x01,
+        0x60,
+        0x00,
+        0x01,
+        0x7b,
+        0x03,
+        0x02,
+        0x01,
+        0x00,
+        0x0a,
+        0x16,
+        0x01,
+        0x14,
+        0x00,
+        0xfd,
+        0x0c,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x0b
       )
+
+      let supports = WebAssembly.validate(simdProbe)
+      if (supports) {
+        try {
+          // eslint-disable-next-line no-new
+          new WebAssembly.Module(simdProbe)
+        } catch (e) {
+          supports = false
+        }
+      }
+
+      JASSUB._supportsSIMD = supports
     } catch (e) {
       JASSUB._supportsSIMD = false
     }

@@ -96,6 +96,7 @@ interface JassubOptions {
   wasmUrl?: string;
   legacyWasmUrl?: string;
   modernWasmUrl?: string;
+  forceModernWasmUrl?: boolean;
 
   subUrl?: string;
   subContent?: string;
